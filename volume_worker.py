@@ -76,14 +76,14 @@ def _folds_from_env(raw: str) -> Tuple[int, ...]:
     return tuple(vals) if vals else (0, 1, 2, 3, 4)
 
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "100.79.202.62")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "100.110.113.24")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5674"))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "brainnav")
 RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "BrainNav_Secure_2025!")
 RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", "brainnav_vhost")
 VOLUME_QUEUE = os.getenv("VOLUME_QUEUE", "segmentation_volume_tasks")
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://:BrainNav_Secure_2025!@100.79.202.62:6381/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://:BrainNav_Secure_2025!@100.110.113.24:6381/0")
 RESULT_TTL = int(os.getenv("RESULT_TTL", "86400"))  # 24 jam untuk post-hoc
 
 NNUNET_MODEL_FOLDER = os.getenv("NNUNET_MODEL_FOLDER", "./nnUnet-Papavero")

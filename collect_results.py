@@ -68,7 +68,7 @@ def main() -> int:
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--count", type=int, required=True)
     ap.add_argument("--out", default=None, help="CSV output (default <run-id>.csv)")
-    ap.add_argument("--redis-url", default=os.getenv("REDIS_URL", "redis://:BrainNav_Secure_2025!@100.79.202.62:6381/0"))
+    ap.add_argument("--redis-url", default=os.getenv("REDIS_URL", "redis://:BrainNav_Secure_2025!@100.110.113.24:6381/0"))
     ap.add_argument("--timeout", type=int, default=7200, help="Detik menunggu semua task")
     ap.add_argument("--poll", type=float, default=2.0)
     ap.add_argument("--baseline-csv", default=None, help="CSV S1 untuk hitung speedup")
