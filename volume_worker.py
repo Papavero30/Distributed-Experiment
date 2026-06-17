@@ -52,7 +52,7 @@ try:
     import redis
     import torch
     from flask import Flask, jsonify
-    from prometheus_client import Counter, Gauge, Histogram, generate_latest
+    from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
     from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 except ImportError as e:  # pragma: no cover
     print(f"[ERROR] dependency belum lengkap: {e}")
@@ -297,7 +297,7 @@ def health():
 
 @app.route("/metrics")
 def metrics():
-    return generate_latest()
+    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
 
 def main():

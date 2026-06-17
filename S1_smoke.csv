@@ -1,0 +1,5 @@
+task_id,idx,worker_name,gpu_type,queue_wait_ms,inference_ms,total_ms,e2e_ms,fg_voxels
+S1_smoke_t000,0,master-3050ti,rtx-3050ti-mobile,53,75730,76639,76693,5
+S1_smoke_t001,1,master-3050ti,rtx-3050ti-mobile,76708,75414,76354,153062,5
+# wallclock_sec,153.06
+# throughput_per_min,0.784
