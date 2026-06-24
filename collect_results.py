@@ -127,6 +127,10 @@ def main() -> int:
 
     throughput_per_min = len(rows) / (wallclock_sec / 60.0) if wallclock_sec > 0 else 0.0
 
+    # Rentang waktu absolut (untuk set time range di Grafana/Prometheus)
+    t_start_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t_start_ns / 1e9))
+    t_end_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t_end_ns / 1e9))
+
     # CSV per-task
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -141,6 +145,8 @@ def main() -> int:
         # ringkasan sebagai komentar (dibaca oleh --baseline-csv)
         f.write(f"# wallclock_sec,{wallclock_sec:.2f}\n")
         f.write(f"# throughput_per_min,{throughput_per_min:.3f}\n")
+        f.write(f"# t_start,{t_start_str}\n")
+        f.write(f"# t_end,{t_end_str}\n")
 
     # Speedup vs baseline
     speedup = efficiency = None
@@ -155,6 +161,7 @@ def main() -> int:
     print("=" * 60)
     print(f" Task selesai        : {len(rows)}/{args.count}")
     print(f" Wall-clock batch    : {wallclock_sec:.1f} s")
+    print(f" GRAFANA time range  : {t_start_str}  ->  {t_end_str}  (waktu lokal)")
     print(f" Throughput          : {throughput_per_min:.2f} task/menit")
     print(f" E2E latency  mean   : {st.mean(e2e_ms)/1000:.1f} s")
     print(f"              p50    : {pctile(e2e_ms,0.5)/1000:.1f} s")

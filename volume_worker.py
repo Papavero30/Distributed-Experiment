@@ -97,6 +97,10 @@ METRICS_PORT = int(os.getenv("METRICS_PORT", "8000"))
 
 PAYLOAD_MODE = os.getenv("PAYLOAD_MODE", "reference").strip().lower()
 SCAN_DIR = os.getenv("SCAN_DIR", "./scans")
+# Jika di-set, worker menyimpan SATU mask hasil prediksi per run_id (file
+# pertama yang ia proses untuk run itu) sebagai NIfTI. Berguna untuk
+# membandingkan kualitas segmentasi antar node/konfigurasi pada slice yang sama.
+SAVE_MASK_DIR = os.getenv("SAVE_MASK_DIR", "").strip()
 
 
 # --------------------------------------------------------------------------
@@ -131,7 +135,8 @@ def to_nnunet_input(vol: np.ndarray):
     return arr, axis_z
 
 
-def run_volume_inference(predictor, vol: np.ndarray, spacing) -> np.ndarray:
+def run_volume_inference(predictor, vol: np.ndarray, spacing):
+    """Return (mask_zyx uint8, axis_z). mask dalam orientasi (Z,Y,X)."""
     arr, axis_z = to_nnunet_input(vol)
     sp = list(spacing)
     sp_z = sp[axis_z]
@@ -143,16 +148,16 @@ def run_volume_inference(predictor, vol: np.ndarray, spacing) -> np.ndarray:
         output_file_truncated=None,
         save_or_return_probabilities=False,
     )
-    return np.asarray(mask).astype(np.uint8)
+    return np.asarray(mask).astype(np.uint8), axis_z
 
 
-def load_volume_from_task(task: Dict[str, Any]) -> Tuple[np.ndarray, list]:
-    """Ambil volume + spacing dari task sesuai PAYLOAD_MODE."""
+def load_volume_from_task(task: Dict[str, Any]) -> Tuple[np.ndarray, list, np.ndarray]:
+    """Ambil (volume, spacing, affine) dari task sesuai PAYLOAD_MODE."""
     if PAYLOAD_MODE == "reference":
         scan_id = task["scan_id"]
         path = os.path.join(SCAN_DIR, f"{scan_id}.nii.gz")
         nii = nib.load(path)
-        return nii.get_fdata().astype(np.float32), list(nii.header.get_zooms()[:3])
+        return nii.get_fdata().astype(np.float32), list(nii.header.get_zooms()[:3]), nii.affine
 
     # default: base64 dari isi file .nii.gz di dalam message
     raw = base64.b64decode(task["volume_b64"])
@@ -163,12 +168,13 @@ def load_volume_from_task(task: Dict[str, Any]) -> Tuple[np.ndarray, list]:
         nii = nib.load(tmp_path)
         vol = nii.get_fdata().astype(np.float32)
         spacing = list(nii.header.get_zooms()[:3])
+        affine = nii.affine
     finally:
         try:
             os.unlink(tmp_path)
         except OSError:
             pass
-    return vol, spacing
+    return vol, spacing, affine
 
 
 # --------------------------------------------------------------------------
@@ -191,6 +197,11 @@ class VolumeWorker:
             NNUNET_MODEL_FOLDER, use_folds=NNUNET_FOLDS, checkpoint_name=CHECKPOINT,
         )
         logger.info("Predictor loaded in %.1fs (warm).", time.perf_counter() - t0)
+
+        self._saved_runs = set()  # run_id yang sudah disimpan mask-nya oleh worker ini
+        if SAVE_MASK_DIR:
+            os.makedirs(SAVE_MASK_DIR, exist_ok=True)
+            logger.info("SAVE_MASK_DIR aktif: %s (1 mask/run/worker)", SAVE_MASK_DIR)
 
         self._setup_rabbitmq()
 
@@ -223,12 +234,12 @@ class VolumeWorker:
         M_ACTIVE.labels(**self.labels).inc()
         total_t0 = time.perf_counter()
         try:
-            vol, spacing = load_volume_from_task(task)
+            vol, spacing, affine = load_volume_from_task(task)
 
             if DEVICE == "cuda":
                 torch.cuda.synchronize()
             inf_t0 = time.perf_counter()
-            mask = run_volume_inference(self.predictor, vol, spacing)
+            mask, axis_z = run_volume_inference(self.predictor, vol, spacing)
             if DEVICE == "cuda":
                 torch.cuda.synchronize()
             inference_ms = int((time.perf_counter() - inf_t0) * 1000)
@@ -236,6 +247,18 @@ class VolumeWorker:
             fg = int((mask > 0).sum())
             total_ms = int((time.perf_counter() - total_t0) * 1000)
             done_ns = time.time_ns()
+
+            # Simpan 1 mask per run (orientasi & affine asli) untuk perbandingan gambar.
+            if SAVE_MASK_DIR and run_id not in self._saved_runs:
+                try:
+                    mask_orig = np.moveaxis(mask, 0, axis_z)
+                    fname = f"{run_id}__{WORKER_NAME}__{task.get('scan_id','scan')}.nii.gz"
+                    nib.save(nib.Nifti1Image(mask_orig.astype(np.uint8), affine),
+                             os.path.join(SAVE_MASK_DIR, fname))
+                    self._saved_runs.add(run_id)
+                    logger.info("Mask disimpan: %s (fg=%d)", fname, fg)
+                except Exception as se:
+                    logger.warning("Gagal simpan mask: %s", se)
 
             log = {
                 "task_id": task_id, "run_id": run_id,
